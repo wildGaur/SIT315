@@ -10,11 +10,13 @@ const uint8_t interruptPin3 = 8;
 const uint8_t led_r = 13;
 const uint8_t led_g = 12;
 const uint8_t led_b = 11;
+const uint8_t led_y = 10;
 
 const uint8_t triggerPin = A0;
 
 // Globals
 volatile uint8_t flag = 0;
+double timerFrequency = 2;
 
 // State of the both LED set to off
 volatile uint8_t state_r = LOW;
@@ -42,12 +44,14 @@ void setup()
     pinMode(led_r, OUTPUT); // led
     pinMode(led_g, OUTPUT); // led
     pinMode(led_b, OUTPUT); // led
+    pinMode(led_y, OUTPUT); // led
 
     // system interrupt
     attachInterrupt(digitalPinToInterrupt(interruptPin0), motion, CHANGE);
     attachInterrupt(digitalPinToInterrupt(interruptPin1), objCloser, CHANGE);
 
-    // PCint
+    // Timer
+    startTimer();
 }
 
 void loop()
@@ -130,4 +134,48 @@ ISR(PCINT0_vect)
 {
     state_b = !state_b;
     digitalWrite(led_b, state_b);
+}
+
+void startTimer()
+{
+
+    Serial.print("Timer Frequency: ");
+    Serial.println(timerFrequency);
+
+    // Stop all interrupts
+    noInterrupts();
+
+    // Set entire TCCR1A and TCCR1B register to 0
+
+    TCCR1A = 0;
+    TCCR1B = 0;
+
+    // Initialise timer register as 0
+    TCNT1 = 0;
+
+    /* System clock 16 Mhz and Prescalar 1024
+    Timer 1 speed = 16Mhz/1024 = 15.625 Khz
+    Pulse time = 1/15.625 Khz = 0.064 ms
+    We need to turn led every 2 sec.
+    Count upto = 2 sec / 0.064 ms = 31250
+    Which is set to Output compare register
+    */
+
+    OCR1A = 31250;
+
+    // Set value of TCCR1A
+    // Wave generation mode bit is set to 1 as we are using timer on compare
+    // CS12 is set to 0, CS11 to 0 and CS10 to 1 to represent 1024 prescaler.
+    TCCR1B |= 0b00001101;
+
+    // Set value ofTIMSK1
+    // OCIEB is set to 1 to enable compare match interrupt
+    TIMSK1 |= 0b00000010;
+
+    // Enable interrupt
+    interrupts();
+}
+ISR(TIMER1_COMPA_vect)
+{
+    digitalWrite(led_y, digitalRead(led_y) ^ 1);
 }
